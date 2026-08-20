@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF to Speech</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main class="container">
+
+<header class="header">
+    <div class="logo"><i data-lucide="book-open"></i></div>
+    <h1>PDF to Speech</h1>
+    <p>Extract PDF text, edit it, listen to it and create an MP3.</p>
+</header>
+
+{% if error %}
+<div class="error-message"><i data-lucide="alert-circle"></i><span>{{ error }}</span></div>
+{% endif %}
+
+<section class="card">
+    <div class="card-header">
+        <h2>Upload PDF</h2>
+        <p>Select a PDF document to extract its text.</p>
+    </div>
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+        <div class="upload-area" id="upload-area">
+            <div class="upload-icon"><i data-lucide="file-text"></i></div>
+            <h3>Drag & Drop your PDF here</h3>
+            <p class="or-text">or</p>
+            <label for="pdf-input" class="browse-button"><i data-lucide="folder-open"></i>Browse Files</label>
+            <input type="file" id="pdf-input" name="pdf" accept=".pdf,application/pdf" required hidden>
+            <p id="file-name" class="file-name"></p>
+        </div>
+        <button type="submit" class="primary-button"><i data-lucide="upload"></i>Upload PDF</button>
+    </form>
+</section>
+
+{% if extracted_text %}
+
+<section class="card">
+    <div class="document-header">
+        <div>
+            <h2 class="document-title"><i data-lucide="file-text"></i>{{ filename }}</h2>
+            <p>Your PDF has been processed successfully.</p>
+        </div>
+        <span class="success-badge"><i data-lucide="check-circle"></i>Ready</span>
+    </div>
+
+    <div class="statistics">
+        <div class="stat"><div class="stat-icon"><i data-lucide="files"></i></div><div><strong>{{ page_count }}</strong><span>Pages</span></div></div>
+        <div class="stat"><div class="stat-icon"><i data-lucide="type"></i></div><div><strong id="word-count">{{ word_count }}</strong><span>Words</span></div></div>
+        <div class="stat"><div class="stat-icon"><i data-lucide="clock-3"></i></div><div><strong id="reading-time">{{ reading_minutes }}</strong><span>Min read</span></div></div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2 class="section-title"><i data-lucide="file-edit"></i>Extracted Text</h2>
+        <p>Edit the text before listening or creating an MP3.</p>
+    </div>
+
+    <div id="text" class="text-box" contenteditable="true" spellcheck="true">{{ extracted_text }}</div>
+
+    <div class="text-actions">
+        <p class="edit-hint"><i data-lucide="info"></i>Changes update the word count.</p>
+        <div class="action-group">
+            <button type="button" class="secondary-button" onclick="copyText()"><i data-lucide="copy"></i>Copy</button>
+            <button type="button" class="secondary-button" onclick="clearText()"><i data-lucide="trash-2"></i>Clear</button>
+            <button type="button" class="secondary-button" onclick="saveEditedPDF()"><i data-lucide="file-down"></i>Save as PDF</button>
+        </div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2 class="section-title"><i data-lucide="volume-2"></i>Speech Controls</h2>
+        <p>Choose a voice and control the reading speed.</p>
+    </div>
+
+    <div class="setting">
+        <label for="voice"><i data-lucide="mic"></i>Voice</label>
+        <select id="voice"><option>Loading voices...</option></select>
+    </div>
+
+    <div class="setting">
+        <div class="speed-header">
+            <label for="speed"><i data-lucide="gauge"></i>Speech Speed</label>
+            <span id="speed-value">1x</span>
+        </div>
+        <input type="range" id="speed" min="0.5" max="2" step="0.1" value="1">
+    </div>
+
+    <div class="controls">
+        <button type="button" class="control-button play" onclick="speakText()"><i data-lucide="play"></i>Play</button>
+        <button type="button" class="control-button" onclick="pauseSpeech()"><i data-lucide="pause"></i>Pause</button>
+        <button type="button" class="control-button" onclick="resumeSpeech()"><i data-lucide="play"></i>Resume</button>
+        <button type="button" class="control-button stop" onclick="stopSpeech()"><i data-lucide="square"></i>Stop</button>
+    </div>
+
+    <div class="progress-section">
+        <div class="progress-header"><span>Speech progress</span><span id="progress-value">0%</span></div>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2 class="section-title">
+            <i data-lucide="headphones"></i>
+            MP3 Audio
+        </h2>
+
+        <p>
+            Create a downloadable MP3 from the edited text.
+        </p>
+    </div>
+
+    <!-- MP3 ACTION BUTTONS -->
+    <div class="mp3-actions">
+
+        <button
+            type="button"
+            id="mp3-button"
+            class="mp3-button"
+            onclick="generateMP3()"
+        >
+            <i data-lucide="music"></i>
+            Create MP3
+        </button>
+
+        <a
+            id="download-audio"
+            class="mp3-download hidden"
+            download="pdf-speech.mp3"
+        >
+            <i data-lucide="download"></i>
+            Download MP3
+        </a>
+
+    </div>
+
+    <!-- AUDIO PLAYER BELOW BUTTONS -->
+    <div id="audio-result" class="audio-result hidden">
+
+        <audio
+            id="audio-player"
+            controls
+        ></audio>
+
+    </div>
+
+    <p id="audio-status" class="status-text"></p>
+
+</section>
+
+{% endif %}
+
+<footer><p>PDF to Speech</p><span>Built with Python, Flask, JavaScript, HTML & CSS</span></footer>
+</main>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
